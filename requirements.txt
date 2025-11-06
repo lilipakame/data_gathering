@@ -7,3 +7,4 @@ gspread
 oauth2client
 python-dotenv
 jinja2
+ipython
