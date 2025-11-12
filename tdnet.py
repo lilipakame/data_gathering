@@ -16,6 +16,7 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse, parse_qs, unquote
 
 # 設定
+DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 SPREADSHEET_ID = "1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws"
 RANGE_IN_LIST_SHEET = "B2:B"  # worksheet("list").get(...) に渡す範囲
 
@@ -116,9 +117,6 @@ entries = [
 ]
 text = "\n\n".join(entries)
 
-# 環境変数がセットされていればそれを使い、なければ既存の変数を利用
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-
 # Discordに送信
 if text.strip():  # テキストが空でない場合のみ送信
-    r = requests.post(WEBHOOK_URL, json={"content": text})
+    r = requests.post(DISCORD_WEBHOOK_URL, json={"content": text})

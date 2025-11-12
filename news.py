@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 #設定
-WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 # ここでスプレッドシートIDを指定（関数定義は下側の1つだけを使うように重複を削除）
 spreadsheet_id = "1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws"
 
@@ -170,4 +170,4 @@ text = "\n\n".join(entries)
 
 # Discordに送信
 if text.strip():  # テキストが空でない場合のみ送信
-    r = requests.post(WEBHOOK_URL, json={"content": text})
+    r = requests.post(DISCORD_WEBHOOK_URL, json={"content": text})
