@@ -63,31 +63,30 @@ def process_code_feed() -> pd.DataFrame:
     rows = []
     
     for c in codes:
-        for base in ("tdnet", "edinet"):
-            url = f"https://webapi.yanoshin.jp/webapi/{base}/list/{c}.rss"
-            try:
-                feed = feedparser.parse(url)
-            except Exception:
-                continue
+        url = f"https://webapi.yanoshin.jp/webapi/tdnet/list/{c}.rss"
+        try:
+            feed = feedparser.parse(url)
+        except Exception:
+            continue
 
-            for entry in feed.get("entries", []):
-                published_raw = entry.get("published")
-                if not published_raw:
-                    continue
-                # published は JST で提供される前提。tzinfo が無い場合は JST を付与するだけで変換はしない。
-                try:
-                    dt_pub = parsedate_to_datetime(published_raw)
-                    if dt_pub.tzinfo is None:
-                        dt_pub = dt_pub.replace(tzinfo=tokyo_tz)
-                    pub_date_jst = dt_pub.date()
-                except Exception:
-                    # 解析できない場合はスキップ
-                    continue
-                if pub_date_jst == today_jst:
-                    title = clean_html(str(entry.get("title", "")))
-                    link = clean_link(str(entry.get("link", "")))
-                    published = clean_html(published_raw)
-                    rows.append({"title": title, "link": link, "published": published})
+        for entry in feed.get("entries", []):
+            published_raw = entry.get("published")
+            if not published_raw:
+                continue
+            # published は JST で提供される前提。tzinfo が無い場合は JST を付与するだけで変換はしない。
+            try:
+                dt_pub = parsedate_to_datetime(published_raw)
+                if dt_pub.tzinfo is None:
+                    dt_pub = dt_pub.replace(tzinfo=tokyo_tz)
+                pub_date_jst = dt_pub.date()
+            except Exception:
+                # 解析できない場合はスキップ
+                continue
+            if pub_date_jst == today_jst:
+                title = clean_html(str(entry.get("title", "")))
+                link = clean_link(str(entry.get("link", "")))
+                published = clean_html(published_raw)
+                rows.append({"title": title, "link": link, "published": published})
 
             
 
