@@ -15,6 +15,9 @@ from zoneinfo import ZoneInfo
 
 #設定
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+if not WEBHOOK_URL:
+    raise RuntimeError("DISCORD_WEBHOOK_URL is not set. Add it to .env or your environment.")
 # ここでスプレッドシートIDを指定（関数定義は下側の1つだけを使うように重複を削除）
 spreadsheet_id = "1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws"
 
