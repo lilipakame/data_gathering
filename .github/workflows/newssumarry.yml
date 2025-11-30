@@ -15,6 +15,7 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+      REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,4 +31,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run script
-        run: python tdnet.py news.py edinet.py
+        run: python tdnet.py news.py edinet.py fs_sp.py
