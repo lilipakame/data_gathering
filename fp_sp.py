@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import gspread
 from gspread.cell import Cell
 from google.oauth2.service_account import Credentials
+from oauth2client.service_account import ServiceAccountCredentials
 import yfinance as yf
 from dotenv import load_dotenv
 load_dotenv()
@@ -14,8 +15,6 @@ load_dotenv()
 SPREADSHEET_ID = ("1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws")
 WORKSHEET_NAME = ("list")
 JPX_PAGE = "https://www.jpx.co.jp/listing/event-schedules/financial-announcement/"
-SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "abiding-ascent-476815-q6-56a05b29f113.json")
-SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 
 def pick_column(columns, keywords):
@@ -97,8 +96,11 @@ def build_calendar():
     return calendar
 
 def main():
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    gc = gspread.authorize(creds)
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
+    # 認証情報を読み込む
+    credentials = ServiceAccountCredentials.from_json_keyfile_name("abiding-ascent-476815-q6-56a05b29f113.json", scope)
+    gc = gspread.authorize(credentials)
     ws = gc.open_by_key(SPREADSHEET_ID).worksheet(WORKSHEET_NAME)
 
     values = ws.get_all_values()
