@@ -1,14 +1,4 @@
 # Local environment files (do not commit secrets)
 .env
-.env.*
-!.env.example
 
-# Python cache/venv
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-
-# Jupyter
-.ipynb_checkpoints/
 
