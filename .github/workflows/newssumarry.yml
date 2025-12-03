@@ -30,4 +30,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run script
-        run: python tdnet.py news.py edinet.py fp_sp.py
+        run: |
+          python tdnet.py
+          python news.py
+          python edinet.py
+          python fp_sp.py
