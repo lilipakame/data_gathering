@@ -102,7 +102,7 @@ for item in results:
     title = item.get("docDescription", "")
     issuer_name = item.get("filerName")
     pdf_url = (
-        f"https://disclosure.edinet-fsa.go.jp/api/v2/documents/{doc_id}?type=1"
+        f"https://disclosure.edinet-fsa.go.jp/api/v2/documents/{doc_id}?type=2"
         f"&subscription-key={EDINET_API}"
     )
     #企業名をスプシから追加
