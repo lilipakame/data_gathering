@@ -22,26 +22,20 @@ if not WEBHOOK_URL:
 spreadsheet_id = "1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws"
 
 # スプレッドシートからRSSリスト取得する関数
-def get_urls_from_spreadsheet():
-    # GoogleAPI認証
-    # Google APIのスコープを設定
+def get_name_url_pairs():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-    # 認証情報を読み込む
     credentials = ServiceAccountCredentials.from_json_keyfile_name("abiding-ascent-476815-q6-56a05b29f113.json", scope)
-
-    # Googleスプレッドシートに接続（gspreadを使用）
     client = gspread.authorize(credentials)
-    # スプレッドシートを開く
     sh = client.open_by_key(spreadsheet_id)
-    # 指定範囲の値を取得（A列の2行目以降）
-    try:
-        values = sh.worksheet('list').get("C2:C")
-    except Exception:
-        # フォールバック：列Cの値を取得してヘッダー行をスキップ
-        values = [[v] for v in sh.worksheet('list').col_values(1)[1:]]
-    flat_urls = [item[0] for item in values if item]
-    return flat_urls
+    rows = sh.worksheet("list").get("A2:C")  # A:会社名, C:RSS
+    pairs = []
+    for r in rows:
+        if len(r) >= 3:
+            name = r[0].strip()
+            url = r[2].strip()
+            if name and url:
+                pairs.append((name, url))
+    return pairs
 
 def get_company_names_from_spreadsheet():
     # GoogleAPI認証
@@ -68,13 +62,13 @@ def clean_html(text):
 # メイン関数
 def process_rss_feed():
     # スプレッドシートからRSSリストを取得
-    urls = get_urls_from_spreadsheet()
+    pairs = get_name_url_pairs()
     tokyo_tz = ZoneInfo('Asia/Tokyo')
     today_jst = datetime.now(tokyo_tz).date()
     
     # RSSフィードからURLリストを取得
     dfs = []
-    for i, url in enumerate(urls):
+    for company_name, url in pairs:
         try:
             f = feedparser.parse(url)
             entries = f.get("entries", [])
@@ -133,8 +127,7 @@ def process_rss_feed():
         df.drop(columns=['published_parsed', 'updated_parsed', '__pub_date_jst'], errors='ignore', inplace=True)
 
         #企業名をスプシから追加
-        company_names = get_company_names_from_spreadsheet()
-        df['company_name'] = company_names[i]
+        df['company_name'] = company_name
         dfs.append(df)
 
     if not dfs:
