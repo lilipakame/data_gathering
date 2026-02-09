@@ -18,8 +18,6 @@ from urllib.parse import urlparse, parse_qs, unquote
 # 設定
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-if not WEBHOOK_URL:
-    raise RuntimeError("DISCORD_WEBHOOK_URL is not set. Add it to .env or your environment.")
 SPREADSHEET_ID = "1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws"
 RANGE_IN_LIST_SHEET = "B2:B"  # worksheet("list").get(...) に渡す範囲
 
