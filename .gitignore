@@ -1,4 +1,5 @@
 # Local environment files (do not commit secrets)
 .env
+abiding-ascent-*.json
 
 
