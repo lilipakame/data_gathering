@@ -1,3 +1,4 @@
+import base64
 import json
 import re,os
 import feedparser
@@ -48,6 +49,23 @@ def clean_link(link: str) -> str:
     return link
 
 # スプレッドシートからコード一覧を取得（list!B2:B）
+def load_service_account_info(raw_value: str) -> dict:
+    raw_value = raw_value.strip()
+    try:
+        return json.loads(raw_value)
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        decoded = base64.b64decode("".join(raw_value.split()), validate=True).decode("utf-8")
+        return json.loads(decoded)
+    except Exception as error:
+        raise RuntimeError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON must contain the service account JSON itself "
+            "or a base64-encoded service account JSON."
+        ) from error
+
+
 def get_code_from_spreadsheet() -> list[str]:
     scope = [
         "https://spreadsheets.google.com/feeds",
@@ -56,7 +74,7 @@ def get_code_from_spreadsheet() -> list[str]:
     service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
     if service_account_json:
         credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-            json.loads(service_account_json), scope
+            load_service_account_info(service_account_json), scope
         )
     else:
         credentials = ServiceAccountCredentials.from_json_keyfile_name(

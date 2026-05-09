@@ -29,6 +29,8 @@ jobs:
       - name: Create Google service account key
         run: |
           python - <<'PY'
+          import base64
+          import json
           import os
           from pathlib import Path
 
@@ -36,13 +38,27 @@ jobs:
           if not secret:
               raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON secret is not set")
 
+          raw_secret = secret.strip()
+          try:
+              credentials = json.loads(raw_secret)
+          except json.JSONDecodeError:
+              try:
+                  decoded = base64.b64decode("".join(raw_secret.split()), validate=True).decode("utf-8")
+                  credentials = json.loads(decoded)
+              except Exception as error:
+                  raise SystemExit(
+                      "GOOGLE_SERVICE_ACCOUNT_JSON must be raw service account JSON "
+                      "or base64-encoded service account JSON"
+                  ) from error
+
+          normalized_secret = json.dumps(credentials)
           credential_files = {
               os.environ.get("GOOGLE_CREDENTIALS_FILE", "abiding-ascent-476815-q6-56a05b29f113.json"),
               "abiding-ascent-476815-q6-56a05b29f113.json",
               "abiding-ascent-476815-q6-99d884d020ae.json",
           }
           for credential_file in credential_files:
-              Path(credential_file).write_text(secret, encoding="utf-8")
+              Path(credential_file).write_text(normalized_secret, encoding="utf-8")
           PY
 
       - name: Install dependencies
