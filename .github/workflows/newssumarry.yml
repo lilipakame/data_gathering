@@ -1,4 +1,4 @@
-name: News Summary 
+name: News Summary
 
 on:
   schedule:
@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 env:
-  TZ: Asia/Tokyo  # ログ時刻の見え方だけJSTに
+  TZ: Asia/Tokyo
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   news_summary:
@@ -16,13 +17,33 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
       REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+
+      - name: Create Google service account key
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          secret = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+          if not secret:
+              raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON secret is not set")
+
+          credential_files = {
+              os.environ.get("GOOGLE_CREDENTIALS_FILE", "abiding-ascent-476815-q6-56a05b29f113.json"),
+              "abiding-ascent-476815-q6-56a05b29f113.json",
+              "abiding-ascent-476815-q6-99d884d020ae.json",
+          }
+          for credential_file in credential_files:
+              Path(credential_file).write_text(secret, encoding="utf-8")
+          PY
 
       - name: Install dependencies
         run: |

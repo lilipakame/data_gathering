@@ -1,3 +1,4 @@
+import json
 import re,os
 import feedparser
 import hashlib
@@ -18,6 +19,10 @@ from urllib.parse import urlparse, parse_qs, unquote
 # 設定
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+CREDENTIALS_FILE = os.getenv(
+    "GOOGLE_CREDENTIALS_FILE",
+    "abiding-ascent-476815-q6-56a05b29f113.json",
+)
 SPREADSHEET_ID = "1WlamXyzIj6GZAkU_lc8C0mTvMzwoHZk-R_HodUC3Sws"
 RANGE_IN_LIST_SHEET = "B2:B"  # worksheet("list").get(...) に渡す範囲
 
@@ -48,9 +53,15 @@ def get_code_from_spreadsheet() -> list[str]:
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        "abiding-ascent-476815-q6-56a05b29f113.json", scope
-    )
+    service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if service_account_json:
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+            json.loads(service_account_json), scope
+        )
+    else:
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(
+            CREDENTIALS_FILE, scope
+        )
     client = gspread.authorize(credentials)
     ws = client.open_by_key(SPREADSHEET_ID).worksheet("list")
     values = ws.get(RANGE_IN_LIST_SHEET)  # [["7203"], ["6758"], ...]
