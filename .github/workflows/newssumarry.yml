@@ -32,6 +32,7 @@ jobs:
           import base64
           import json
           import os
+          import re
           from pathlib import Path
 
           secret = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -48,22 +49,39 @@ jobs:
           if len(raw_secret) >= 2 and raw_secret[0] == raw_secret[-1] and raw_secret[0] in {"'", '"'}:
               raw_secret = raw_secret[1:-1].strip()
 
+          def parse_json(value):
+              parsed = json.loads(value)
+              if isinstance(parsed, str):
+                  parsed = json.loads(parsed)
+              if not isinstance(parsed, dict):
+                  raise ValueError("service account value is not a JSON object")
+              return parsed
+
+          def repair_private_key_newlines(value):
+              match = re.search(r'("private_key"\s*:\s*")(.*?)("\s*,\s*"client_email")', value, re.S)
+              if not match:
+                  return value
+              private_key = match.group(2).replace("\\n", "\n")
+              private_key = private_key.replace("\r\n", "\n").replace("\r", "\n")
+              private_key = private_key.strip("\n").replace("\n", "\\n")
+              return value[: match.start(2)] + private_key + value[match.end(2) :]
+
           try:
-              credentials = json.loads(raw_secret)
-              if isinstance(credentials, str):
-                  credentials = json.loads(credentials)
-          except json.JSONDecodeError:
+              credentials = parse_json(raw_secret)
+          except (json.JSONDecodeError, ValueError):
+              repaired_secret = repair_private_key_newlines(raw_secret)
               try:
-                  decoded = base64.b64decode("".join(raw_secret.split()), validate=True).decode("utf-8")
-                  credentials = json.loads(decoded)
-              except Exception as error:
-                  raise SystemExit(
-                      "GOOGLE_SERVICE_ACCOUNT_JSON must be service account JSON, "
-                      "GOOGLE_SERVICE_ACCOUNT_JSON=service-account-json, "
-                      "or base64-encoded service account JSON"
-                  ) from error
-          if not isinstance(credentials, dict):
-              raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON did not decode to a JSON object")
+                  credentials = parse_json(repaired_secret)
+              except Exception:
+                  try:
+                      decoded = base64.b64decode("".join(raw_secret.split()), validate=True).decode("utf-8")
+                      credentials = parse_json(decoded)
+                  except Exception as error:
+                      raise SystemExit(
+                          "GOOGLE_SERVICE_ACCOUNT_JSON must be service account JSON, "
+                          "GOOGLE_SERVICE_ACCOUNT_JSON=service-account-json, "
+                          "base64-encoded service account JSON, or JSON with private_key newlines"
+                      ) from error
 
           normalized_secret = json.dumps(credentials)
           credential_files = {

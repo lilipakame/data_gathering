@@ -60,20 +60,38 @@ def load_service_account_info(raw_value: str) -> dict:
     if len(raw_value) >= 2 and raw_value[0] == raw_value[-1] and raw_value[0] in {"'", '"'}:
         raw_value = raw_value[1:-1].strip()
 
-    try:
-        credentials = json.loads(raw_value)
+    def parse_json(value: str) -> dict:
+        credentials = json.loads(value)
         if isinstance(credentials, str):
             credentials = json.loads(credentials)
-        if isinstance(credentials, dict):
-            return credentials
-    except json.JSONDecodeError:
+        if not isinstance(credentials, dict):
+            raise ValueError("service account value is not a JSON object")
+        return credentials
+
+    def repair_private_key_newlines(value: str) -> str:
+        match = re.search(r'("private_key"\s*:\s*")(.*?)("\s*,\s*"client_email")', value, re.S)
+        if not match:
+            return value
+        private_key = match.group(2).replace("\\n", "\n")
+        private_key = private_key.replace("\r\n", "\n").replace("\r", "\n")
+        private_key = private_key.strip("\n").replace("\n", "\\n")
+        return value[: match.start(2)] + private_key + value[match.end(2) :]
+
+    try:
+        return parse_json(raw_value)
+    except (json.JSONDecodeError, ValueError):
         pass
+
+    repaired_value = repair_private_key_newlines(raw_value)
+    if repaired_value != raw_value:
+        try:
+            return parse_json(repaired_value)
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     try:
         decoded = base64.b64decode("".join(raw_value.split()), validate=True).decode("utf-8")
-        credentials = json.loads(decoded)
-        if isinstance(credentials, dict):
-            return credentials
+        return parse_json(decoded)
     except Exception as error:
         raise RuntimeError(
             "GOOGLE_SERVICE_ACCOUNT_JSON must contain service account JSON, "
