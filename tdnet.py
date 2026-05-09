@@ -51,18 +51,34 @@ def clean_link(link: str) -> str:
 # スプレッドシートからコード一覧を取得（list!B2:B）
 def load_service_account_info(raw_value: str) -> dict:
     raw_value = raw_value.strip()
+    if raw_value.startswith("export "):
+        raw_value = raw_value.removeprefix("export ").strip()
+    if "=" in raw_value and not raw_value.lstrip().startswith("{"):
+        key, value = raw_value.split("=", 1)
+        if key.strip() in {"GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_CREDENTIALS_JSON"}:
+            raw_value = value.strip()
+    if len(raw_value) >= 2 and raw_value[0] == raw_value[-1] and raw_value[0] in {"'", '"'}:
+        raw_value = raw_value[1:-1].strip()
+
     try:
-        return json.loads(raw_value)
+        credentials = json.loads(raw_value)
+        if isinstance(credentials, str):
+            credentials = json.loads(credentials)
+        if isinstance(credentials, dict):
+            return credentials
     except json.JSONDecodeError:
         pass
 
     try:
         decoded = base64.b64decode("".join(raw_value.split()), validate=True).decode("utf-8")
-        return json.loads(decoded)
+        credentials = json.loads(decoded)
+        if isinstance(credentials, dict):
+            return credentials
     except Exception as error:
         raise RuntimeError(
-            "GOOGLE_SERVICE_ACCOUNT_JSON must contain the service account JSON itself "
-            "or a base64-encoded service account JSON."
+            "GOOGLE_SERVICE_ACCOUNT_JSON must contain service account JSON, "
+            "GOOGLE_SERVICE_ACCOUNT_JSON=service-account-json, "
+            "or base64-encoded service account JSON."
         ) from error
 
 

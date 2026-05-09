@@ -39,17 +39,31 @@ jobs:
               raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON secret is not set")
 
           raw_secret = secret.strip()
+          if raw_secret.startswith("export "):
+              raw_secret = raw_secret.removeprefix("export ").strip()
+          if "=" in raw_secret and not raw_secret.lstrip().startswith("{"):
+              key, value = raw_secret.split("=", 1)
+              if key.strip() in {"GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_CREDENTIALS_JSON"}:
+                  raw_secret = value.strip()
+          if len(raw_secret) >= 2 and raw_secret[0] == raw_secret[-1] and raw_secret[0] in {"'", '"'}:
+              raw_secret = raw_secret[1:-1].strip()
+
           try:
               credentials = json.loads(raw_secret)
+              if isinstance(credentials, str):
+                  credentials = json.loads(credentials)
           except json.JSONDecodeError:
               try:
                   decoded = base64.b64decode("".join(raw_secret.split()), validate=True).decode("utf-8")
                   credentials = json.loads(decoded)
               except Exception as error:
                   raise SystemExit(
-                      "GOOGLE_SERVICE_ACCOUNT_JSON must be raw service account JSON "
+                      "GOOGLE_SERVICE_ACCOUNT_JSON must be service account JSON, "
+                      "GOOGLE_SERVICE_ACCOUNT_JSON=service-account-json, "
                       "or base64-encoded service account JSON"
                   ) from error
+          if not isinstance(credentials, dict):
+              raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON did not decode to a JSON object")
 
           normalized_secret = json.dumps(credentials)
           credential_files = {
