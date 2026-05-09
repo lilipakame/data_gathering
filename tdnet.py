@@ -66,6 +66,28 @@ def load_service_account_info(raw_value: str) -> dict:
             credentials = json.loads(credentials)
         if not isinstance(credentials, dict):
             raise ValueError("service account value is not a JSON object")
+        return normalize_private_key(credentials)
+
+    def normalize_private_key(credentials: dict) -> dict:
+        private_key = str(credentials.get("private_key", "")).strip()
+        if not private_key:
+            raise ValueError("service account private_key is empty")
+
+        private_key = private_key.replace("\\n", "\n")
+        private_key = private_key.replace("\r\n", "\n").replace("\r", "\n")
+        private_key = re.sub(r"-----BEGIN PRIVATE KEY-----\s*", "-----BEGIN PRIVATE KEY-----\n", private_key)
+        private_key = re.sub(r"\s*-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n", private_key)
+
+        begin = "-----BEGIN PRIVATE KEY-----"
+        end = "-----END PRIVATE KEY-----"
+        if begin in private_key and end in private_key:
+            body = private_key.split(begin, 1)[1].split(end, 1)[0]
+            body = "".join(body.split())
+            if body:
+                wrapped_body = "\n".join(body[i : i + 64] for i in range(0, len(body), 64))
+                private_key = f"{begin}\n{wrapped_body}\n{end}\n"
+
+        credentials["private_key"] = private_key
         return credentials
 
     def repair_private_key_newlines(value: str) -> str:
