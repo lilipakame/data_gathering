@@ -12,3 +12,4 @@ beautifulsoup4
 openpyxl
 yfinance
 xlrd
+Flask
