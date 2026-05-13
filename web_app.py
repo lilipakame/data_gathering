@@ -281,6 +281,46 @@ def render_table(items: list[WatchItem], empty_label: str, *, rss_only: bool = F
 """
 
 
+def render_rss_only_table(items: list[WatchItem], empty_label: str) -> str:
+    if not items:
+        return f'<p class="empty">{escape(empty_label)}</p>'
+    rows = []
+    for item in items:
+        title = item.company_name if item.company_name else "RSSフィード"
+        rows.append(
+            f"""
+<tr>
+  <form method="post" action="/items/{item.row_number}">
+    <td><input name="company_name" value="{escape(title)}" placeholder="表示名"></td>
+    <td><input name="rss_url" value="{escape(item.rss_url)}" placeholder="https://..."></td>
+    <td class="actions">
+      <input type="hidden" name="stock_code" value="">
+      <input type="hidden" name="edinet_code" value="">
+      <button type="submit" class="btn-save">保存</button>
+  </form>
+      <form method="post" action="/items/{item.row_number}/delete" onsubmit="return confirm('この行を削除しますか？');">
+        <button type="submit" class="btn-del">削除</button>
+      </form>
+    </td>
+</tr>
+"""
+        )
+    return f"""
+<div class="table-wrap">
+  <table class="rss-table">
+    <thead>
+      <tr>
+        <th>表示名</th>
+        <th>URL</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+</div>
+"""
+
+
 def render_page(items: list[WatchItem], indexes: dict[str, int | None], message: str = "") -> str:
     stock_items, rss_only_items = split_items(items)
     missing = missing_required_columns(indexes)
@@ -324,16 +364,16 @@ def render_page(items: list[WatchItem], indexes: dict[str, int | None], message:
     </section>
 
     <section class="panel">
-      <h2>RSS単独（例: 頼さんノート）</h2>
+      <h2>RSS単独</h2>
       <form method="post" action="/items" class="quick-form">
-        <input name="company_name" placeholder="表示名 (例: 頼さんノート)">
-        <input name="stock_code" value="" placeholder="銘柄コード不要">
+        <input name="company_name" placeholder="表示名">
+        <input name="stock_code" type="hidden" value="">
         <input name="rss_url" placeholder="URL (RSS)" required>
-        <input name="edinet_code" value="" placeholder="EDINET不要">
+        <input name="edinet_code" type="hidden" value="">
         <button type="submit">RSS追加</button>
       </form>
       <div class="hint">RSS単独: {len(rss_only_items)}件</div>
-      {render_table(rss_only_items, "RSS単独データはまだありません。", rss_only=True)}
+      {render_rss_only_table(rss_only_items, "RSS単独データはまだありません。")}
     </section>
   </main>
 </body>
@@ -513,6 +553,7 @@ button {
 .hint { font-size: 12px; color: #475569; margin: 0 0 6px; }
 .table-wrap { overflow-x: auto; border: 1px solid #dbe3ec; border-radius: 8px; }
 table { width: 100%; border-collapse: collapse; min-width: 980px; }
+.rss-table { min-width: 640px; }
 th, td { border-bottom: 1px solid #e7edf3; padding: 6px; vertical-align: middle; }
 th {
   position: sticky;
