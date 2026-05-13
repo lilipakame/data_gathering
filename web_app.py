@@ -36,18 +36,18 @@ SCOPES = [
 DEFAULT_HEADERS = [
     "企業名",
     "銘柄コード",
-    "RSS",
+    "URL",
     "Edinetコード",
     "決算予定日",
     "決算種類",
     "現在株価",
 ]
 HEADER_ALIASES = {
-    "company_name": ["企業名", "銘柄名", "会社名", "Issue Name"],
+    "company_name": ["企業名", "銘柄名", "会社名", "Issue Name", "表示名"],
     "stock_code": ["銘柄コード", "コード", "Code"],
-    "rss_url": ["RSS", "RSS URL", "RSS_URL", "RSSリンク"],
+    "rss_url": ["URL", "RSS", "RSS URL", "RSS_URL", "RSSリンク"],
     "edinet_code": ["Edinetコード", "EDINETコード", "EDINET"],
-    "fiscal_date": ["決算予定日", "決算発表予定日", "決算予想日"],
+    "fiscal_date": ["決算予定日", "決算発表予定日", "決算日"],
     "fiscal_kind": ["決算種類", "決算種別", "種別"],
     "current_price": ["現在株価", "株価"],
 }
@@ -84,7 +84,6 @@ def load_service_account_info(raw_value: str) -> dict:
         private_key = str(credentials.get("private_key", "")).strip()
         if not private_key:
             raise ValueError("service account private_key is empty")
-
         private_key = private_key.replace("\\n", "\n")
         private_key = private_key.replace("\r\n", "\n").replace("\r", "\n")
         private_key = re.sub(r"-----BEGIN PRIVATE KEY-----\s*", "-----BEGIN PRIVATE KEY-----\n", private_key)
@@ -98,7 +97,6 @@ def load_service_account_info(raw_value: str) -> dict:
             if body:
                 wrapped_body = "\n".join(body[i : i + 64] for i in range(0, len(body), 64))
                 private_key = f"{begin}\n{wrapped_body}\n{end}\n"
-
         credentials["private_key"] = private_key
         return credentials
 
@@ -217,62 +215,83 @@ def update_editable_cells(worksheet, row_number: int, indexes: dict[str, int | N
 
 
 def missing_required_columns(indexes: dict[str, int | None]) -> list[str]:
-    labels = {
-        "company_name": "企業名",
-        "stock_code": "銘柄コード",
-        "rss_url": "RSS",
-        "edinet_code": "Edinetコード",
-    }
+    labels = {"rss_url": "URL"}
     return [label for field_name, label in labels.items() if indexes[field_name] is None]
 
 
-def input_field(name: str, label: str, placeholder: str, value: str = "", required: bool = False) -> str:
-    required_attr = " required" if required else ""
-    return (
-        f'<label><span>{escape(label)}</span>'
-        f'<input name="{escape(name)}" value="{escape(value)}" placeholder="{escape(placeholder)}"{required_attr}></label>'
-    )
+def split_items(items: list[WatchItem]) -> tuple[list[WatchItem], list[WatchItem]]:
+    stock_items = []
+    rss_only_items = []
+    for item in items:
+        has_stock_identity = bool(item.stock_code or item.edinet_code)
+        if has_stock_identity:
+            stock_items.append(item)
+        elif item.rss_url:
+            rss_only_items.append(item)
+        else:
+            stock_items.append(item)
+    return stock_items, rss_only_items
 
 
-def render_item(item: WatchItem) -> str:
-    return f"""<article class="item-card">
-  <form method="post" action="/items/{item.row_number}" class="grid-form compact">
-    <div class="row-title">
-      <strong>{escape(item.company_name or "名称未設定")}</strong>
-      <span>#{item.row_number}</span>
-    </div>
-    {input_field("company_name", "企業名", "企業名", item.company_name, required=True)}
-    {input_field("stock_code", "銘柄コード", "銘柄コード", item.stock_code)}
-    {input_field("rss_url", "RSS URL", "RSS URL", item.rss_url)}
-    {input_field("edinet_code", "EDINETコード", "EDINETコード", item.edinet_code)}
-    <div class="readonly">
-      <span>決算予定日: {escape(item.fiscal_date or "-")}</span>
-      <span>決算種類: {escape(item.fiscal_kind or "-")}</span>
-      <span>現在株価: {escape(item.current_price or "-")}</span>
-    </div>
-    <div class="actions">
-      <button type="submit">保存</button>
-    </div>
+def row_form(item: WatchItem, *, rss_only: bool = False) -> str:
+    title = item.company_name if item.company_name else ("RSSフィード" if rss_only else "")
+    return f"""
+<tr>
+  <form method="post" action="/items/{item.row_number}">
+    <td><input name="company_name" value="{escape(title)}" placeholder="企業名 or 表示名"></td>
+    <td><input name="stock_code" value="{escape(item.stock_code)}" placeholder="7203"></td>
+    <td><input name="rss_url" value="{escape(item.rss_url)}" placeholder="https://..."></td>
+    <td><input name="edinet_code" value="{escape(item.edinet_code)}" placeholder="E02144"></td>
+    <td class="ro">{escape(item.fiscal_date or "-")}</td>
+    <td class="ro">{escape(item.fiscal_kind or "-")}</td>
+    <td class="ro">{escape(item.current_price or "-")}</td>
+    <td class="actions">
+      <button type="submit" class="btn-save">保存</button>
   </form>
-  <form method="post" action="/items/{item.row_number}/delete" class="delete-form">
-    <button type="submit" onclick="return confirm('この行を削除しますか？')">削除</button>
-  </form>
-</article>"""
+      <form method="post" action="/items/{item.row_number}/delete" onsubmit="return confirm('この行を削除しますか？');">
+        <button type="submit" class="btn-del">削除</button>
+      </form>
+    </td>
+</tr>
+"""
+
+
+def render_table(items: list[WatchItem], empty_label: str, *, rss_only: bool = False) -> str:
+    if not items:
+        return f'<p class="empty">{escape(empty_label)}</p>'
+    rows = "".join(row_form(item, rss_only=rss_only) for item in items)
+    return f"""
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>名称</th>
+        <th>銘柄コード</th>
+        <th>URL</th>
+        <th>EDINET</th>
+        <th>決算予定日</th>
+        <th>決算種類</th>
+        <th>現在株価</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>
+"""
 
 
 def render_page(items: list[WatchItem], indexes: dict[str, int | None], message: str = "") -> str:
+    stock_items, rss_only_items = split_items(items)
     missing = missing_required_columns(indexes)
-    rows_html = "".join(render_item(item) for item in items)
     message_html = f'<div class="notice">{escape(message)}</div>' if message else ""
     missing_html = ""
     if missing:
         missing_html = (
-            '<div class="warning">スプレッドシートのヘッダーに '
-            + escape("、".join(missing))
-            + " が見つかりません。既存の取得処理に合わせた列名にしてください。</div>"
+            '<div class="warning">シートのヘッダーに '
+            + escape(", ".join(missing))
+            + " が見つかりません。1行目の列名を確認してください。</div>"
         )
-    if not rows_html:
-        rows_html = '<p class="empty">まだ登録がありません。下のフォームから追加してください。</p>'
 
     return f"""<!doctype html>
 <html lang="ja">
@@ -284,29 +303,38 @@ def render_page(items: list[WatchItem], indexes: dict[str, int | None], message:
 </head>
 <body>
   <main class="container">
-    <header class="hero">
-      <p class="eyebrow">Data Gathering</p>
+    <header class="topbar">
       <h1>銘柄・RSS 管理</h1>
-      <p>既存のGoogleスプレッドシートをデータ置き場にしたまま、スマホから銘柄コード・銘柄名・RSS・EDINETコードを追加できます。</p>
+      <div class="meta">Spreadsheet: {escape(SPREADSHEET_ID)} / Sheet: {escape(WORKSHEET_NAME)}</div>
     </header>
     {message_html}
     {missing_html}
-    <section class="card">
-      <h2>新規追加</h2>
-      <form method="post" action="/items" class="grid-form">
-        {input_field("company_name", "企業名", "例：トヨタ自動車", required=True)}
-        {input_field("stock_code", "銘柄コード", "例：7203")}
-        {input_field("rss_url", "RSS URL", "https://...")}
-        {input_field("edinet_code", "EDINETコード", "例：E02144")}
-        <button type="submit">追加する</button>
+
+    <section class="panel">
+      <h2>銘柄登録</h2>
+      <form method="post" action="/items" class="quick-form">
+        <input name="company_name" placeholder="企業名">
+        <input name="stock_code" placeholder="銘柄コード">
+        <input name="rss_url" placeholder="URL (RSS)">
+        <input name="edinet_code" placeholder="EDINETコード">
+        <button type="submit">追加</button>
       </form>
+      <div class="hint">銘柄ウォッチ: {len(stock_items)}件</div>
+      {render_table(stock_items, "銘柄データはまだありません。")}
     </section>
-    <section class="list-header">
-      <h2>登録済みリスト</h2>
-      <span>{len(items)}件</span>
+
+    <section class="panel">
+      <h2>RSS単独（例: 頼さんノート）</h2>
+      <form method="post" action="/items" class="quick-form">
+        <input name="company_name" placeholder="表示名 (例: 頼さんノート)">
+        <input name="stock_code" value="" placeholder="銘柄コード不要">
+        <input name="rss_url" placeholder="URL (RSS)" required>
+        <input name="edinet_code" value="" placeholder="EDINET不要">
+        <button type="submit">RSS追加</button>
+      </form>
+      <div class="hint">RSS単独: {len(rss_only_items)}件</div>
+      {render_table(rss_only_items, "RSS単独データはまだありません。", rss_only=True)}
     </section>
-    <section class="items">{rows_html}</section>
-    <footer>Spreadsheet: {escape(SPREADSHEET_ID)} / Worksheet: {escape(WORKSHEET_NAME)}</footer>
   </main>
 </body>
 </html>"""
@@ -359,12 +387,14 @@ class WatchlistHandler(BaseHTTPRequestHandler):
         headers = ensure_headers(worksheet)
         indexes = column_indexes(headers)
         self.abort_if_missing_columns(indexes)
+        if not any(v.strip() for v in form.values()):
+            raise ValueError("空の行は追加できません。")
         worksheet.append_row(values_for_row(headers, indexes, form), value_input_option="USER_ENTERED")
         self.redirect_home("追加しました")
 
     def update_item(self, row_number: int, form: dict[str, str]) -> None:
         if row_number < 2:
-            raise ValueError("更新できない行番号です")
+            raise ValueError("不正な行番号です。")
         worksheet = build_worksheet()
         headers = ensure_headers(worksheet)
         indexes = column_indexes(headers)
@@ -374,7 +404,7 @@ class WatchlistHandler(BaseHTTPRequestHandler):
 
     def delete_item(self, row_number: int) -> None:
         if row_number < 2:
-            raise ValueError("削除できない行番号です")
+            raise ValueError("不正な行番号です。")
         build_worksheet().delete_rows(row_number)
         self.redirect_home("削除しました")
 
@@ -428,11 +458,7 @@ class WatchlistHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def send_error_page(self, error: Exception) -> None:
-        body = (
-            "<h1>エラー</h1>"
-            f"<p>{escape(str(error))}</p>"
-            '<p><a href="/">戻る</a></p>'
-        )
+        body = "<h1>Error</h1>" f"<p>{escape(str(error))}</p>" '<p><a href="/">Back</a></p>'
         self.send_html(body, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 
@@ -443,44 +469,74 @@ def run() -> None:
 
 
 CSS = """
-:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-body { margin: 0; background: #eef3f8; color: #102033; }
-.container { width: min(960px, calc(100% - 28px)); margin: 0 auto; padding: 20px 0 40px; }
-.hero { background: linear-gradient(135deg, #0f766e, #2563eb); color: white; border-radius: 26px; padding: 28px; box-shadow: 0 16px 40px rgba(37, 99, 235, .22); }
-.hero h1 { margin: 4px 0 10px; font-size: clamp(28px, 8vw, 44px); }
-.hero p { margin: 0; line-height: 1.7; }
-.eyebrow { opacity: .8; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.card, .item-card { background: white; border-radius: 22px; padding: 18px; margin-top: 16px; box-shadow: 0 8px 24px rgba(16, 32, 51, .08); }
-.card h2, .list-header h2 { margin: 0 0 14px; }
-.grid-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.grid-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; color: #42526b; }
-.grid-form input { border: 1px solid #d8e0ea; border-radius: 14px; padding: 14px; font: inherit; font-size: 16px; background: #fbfdff; }
-.grid-form input:focus { outline: 3px solid rgba(37, 99, 235, .18); border-color: #2563eb; }
-button { border: 0; border-radius: 14px; padding: 14px 18px; font: inherit; font-weight: 800; background: #2563eb; color: white; cursor: pointer; }
-button:hover { filter: brightness(.95); }
-.grid-form > button { align-self: end; }
-.notice, .warning { margin-top: 14px; border-radius: 16px; padding: 14px 16px; font-weight: 700; }
-.notice { background: #dcfce7; color: #166534; }
-.warning { background: #fef3c7; color: #92400e; }
-.list-header { display: flex; align-items: center; justify-content: space-between; margin: 24px 4px 8px; }
-.list-header span { background: white; border-radius: 999px; padding: 8px 12px; font-weight: 800; }
-.row-title { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
-.row-title strong { font-size: 20px; }
-.row-title span { color: #667085; font-weight: 700; }
-.readonly { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; color: #475467; font-size: 13px; }
-.readonly span { background: #f2f4f7; border-radius: 999px; padding: 7px 10px; }
-.actions { display: flex; gap: 8px; align-items: end; }
-.delete-form { margin-top: 10px; }
-.delete-form button { background: #fff1f2; color: #be123c; width: 100%; }
-.empty { background: white; border-radius: 18px; padding: 22px; color: #667085; }
-footer { color: #667085; font-size: 12px; text-align: center; margin-top: 28px; overflow-wrap: anywhere; }
-@media (max-width: 720px) {
-  .container { width: min(100% - 20px, 960px); padding-top: 10px; }
-  .hero { padding: 22px; border-radius: 22px; }
-  .grid-form { grid-template-columns: 1fr; }
-  .grid-form.compact { gap: 10px; }
-  button { width: 100%; }
-  .card, .item-card { padding: 16px; border-radius: 20px; }
+:root {
+  color-scheme: light;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body { margin: 0; background: #f5f7fa; color: #1e293b; }
+.container { width: min(1320px, calc(100% - 20px)); margin: 10px auto 20px; }
+.topbar { display: flex; justify-content: space-between; align-items: end; gap: 8px; margin: 0 0 10px; }
+.topbar h1 { margin: 0; font-size: 22px; }
+.meta { font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+.panel { background: #fff; border: 1px solid #dbe3ec; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+.panel h2 { margin: 0 0 8px; font-size: 16px; }
+.quick-form {
+  display: grid;
+  grid-template-columns: 1.2fr .9fr 2fr .9fr auto;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 34px;
+  border: 1px solid #c9d4df;
+  border-radius: 6px;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 14px;
+  background: #fff;
+}
+input:focus { outline: 2px solid #bfdbfe; border-color: #3b82f6; }
+button {
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.quick-form button, .btn-save { background: #2563eb; color: #fff; }
+.btn-del { background: #ffe4e6; color: #be123c; }
+.hint { font-size: 12px; color: #475569; margin: 0 0 6px; }
+.table-wrap { overflow-x: auto; border: 1px solid #dbe3ec; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; min-width: 980px; }
+th, td { border-bottom: 1px solid #e7edf3; padding: 6px; vertical-align: middle; }
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  font-size: 12px;
+  color: #334155;
+  text-align: left;
+  white-space: nowrap;
+}
+td.ro { color: #64748b; font-size: 12px; white-space: nowrap; }
+td.actions { width: 126px; white-space: nowrap; }
+td.actions form { display: inline-block; margin: 0; }
+td.actions button { width: 56px; margin-left: 4px; }
+.notice, .warning { margin: 0 0 10px; border-radius: 8px; padding: 9px 10px; font-size: 13px; font-weight: 600; }
+.notice { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.empty { color: #64748b; font-size: 13px; padding: 8px; margin: 0; }
+@media (max-width: 900px) {
+  .topbar { display: block; }
+  .topbar h1 { margin-bottom: 2px; }
+  .quick-form { grid-template-columns: 1fr 1fr; }
+  .quick-form button { grid-column: 1 / -1; }
 }
 """
 
